@@ -1,6 +1,7 @@
 require('dotenv').config()
 const express = require("express");
 const mongoose = require("mongoose");
+const twilio = require('twilio');
 const bodyParser = require("body-parser");
 const cors = require("cors");
 
@@ -8,14 +9,15 @@ const {HoldingsModel} = require("./model/HoldingsModel");
 const {OrdersModel} = require("./model/OrdersModel");
 const {PositionsModel} = require("./model/PositionsModel");
 
-
-const PORT = process.env.PORT  || 3002;
+const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+const PORT = process.env.PORT  || 3001;
 const uri = process.env.MONGO_URL;
 
 const app = express()
 
 app.use(cors());
 app.use(bodyParser.json());
+app.use(express.json());
 
 
 // app.get("/addHoldings", async(req, res) => {
@@ -218,8 +220,52 @@ app.post("/newOrder", async(req,res) => {
 
 })
 
+
+// Send OTP
+app.post('/send-otp', async (req, res) => {
+  console.log("hit send otp");
+  let { phone } = req.body;  // Expect phone in E.164 format, e.g. '+919876543210'
+  if (!phone.startsWith('+')) {
+    phone = '+91' + phone;
+  }
+  console.log(phone)
+  try {
+    const verification = await client.verify.v2
+      .services(process.env.TWILIO_SERVICE_SID)
+      .verifications.create({ to: phone, channel: 'sms' });
+
+    return res.status(200).json({ status: verification.status });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+
+// / Verify OTP
+app.post('/verify-otp', async (req, res) => {
+  const { phone, code } = req.body;
+  try {
+    const verificationCheck = await client.verify.v2
+      .services(process.env.TWILIO_SERVICE_SID)
+      .verificationChecks.create({ to: phone, code });
+
+    if (verificationCheck.status === 'approved') {
+      return res.status(200).json({ success: true });
+    } else {
+      return res.status(400).json({ success: false, status: verificationCheck.status });
+    }
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+
+
 app.listen(PORT, ()=> {
     console.log("app started")
     mongoose.connect(uri)
     console.log("DB connected")
+    console.log(`Server running on port ${PORT}`)
 })
