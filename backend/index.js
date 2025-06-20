@@ -244,7 +244,10 @@ app.post('/send-otp', async (req, res) => {
 
 // / Verify OTP
 app.post('/verify-otp', async (req, res) => {
-  const { phone, code } = req.body;
+  let { phone, code } = req.body;
+  if (!phone.startsWith('+')) {
+    phone = '+91' + phone;
+  }
   try {
     const verificationCheck = await client.verify.v2
       .services(process.env.TWILIO_SERVICE_SID)
